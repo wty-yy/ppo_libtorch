@@ -19,6 +19,7 @@ fs::path PATH_ROOT = tensorboard::get_root_path();
 std::string PATH_CKPT = PATH_ROOT / "ckpt";
 // std::string PATH_CKPT = PATH_ROOT / "best_ckpt";
 int find_new_ckpt = true;
+int deterministic = false;
 
 std::string get_largest(const std::string& directory_path, bool find_folder) {
   std::string largest_folder_name, largest_folder_stem="0";
@@ -44,6 +45,7 @@ int main(int argc, char* argv[]) {
   parser.add_argument("--cuda").flag().help("If triggered, use cuda, make sure device is same as model save in training");
   parser.add_argument("--path-ckpt-dir").store_into(PATH_CKPT).help("The checkpoints load path");
   parser.add_argument("--find-new-ckpt").store_into(find_new_ckpt).help("If set to 1, find newest training directory");
+  parser.add_argument("--deterministic").store_into(deterministic).help("If set to 1, use deterministic policy");
   try {
     parser.parse_args(argc, argv);
   } catch(const std::exception& err) {
@@ -74,9 +76,13 @@ int main(int argc, char* argv[]) {
   while (1) {
     auto obs = torch::from_blob(info.obs->data(), obs_space).to(device);
     auto [action, value] = model->forward(obs);
-    auto softmax_probs = torch::softmax(action, 0);
-    int act = torch::multinomial(softmax_probs, 1).item<int>();
-    // int act = action.argmax().item<int>();
+    int act;
+    if (deterministic) {
+      auto softmax_probs = torch::softmax(action, 0);
+      act = torch::multinomial(softmax_probs, 1).item<int>();
+    } else {
+      act = action.argmax().item<int>();
+    }
     info = game.step(act);
     if (info.done) {
       info = game.reset();
