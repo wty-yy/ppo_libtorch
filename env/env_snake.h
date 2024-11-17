@@ -24,9 +24,13 @@ struct SnakeGameOption {
   double _seed;
   int _width, _height, _gridSize, _windowWidth, _windowHeight;
   bool _useRender;
+  double _reward_step, _reward_done, _reward_food;
 
-  SnakeGameOption(double seed=NAN, bool useRender=false, int width=16, int height=16, int gridSize=40) : 
-    _seed(seed), _useRender(useRender), _width(width), _height(height), _gridSize(gridSize) {
+  SnakeGameOption(
+  double seed=NAN, bool useRender=false, int width=16, int height=16,
+  int gridSize=40, double reward_step=-0.01, double reward_done=-10, double reward_food=1) : 
+    _seed(seed), _useRender(useRender), _width(width), _height(height), _gridSize(gridSize),
+    _reward_step(reward_step), _reward_done(reward_done), _reward_food(reward_food) {
     _windowWidth = _width * _gridSize;
     _windowHeight = _height * _gridSize;
   }
@@ -35,6 +39,9 @@ struct SnakeGameOption {
   SnakeGameOption &&width(int x) {_width = x; update(); return std::move(*this);}
   SnakeGameOption &&height(int x) {_height = x; update(); return std::move(*this);}
   SnakeGameOption &&gridSize(int x) {_gridSize = x; update(); return std::move(*this);}
+  SnakeGameOption &&reward_step(double x) {_reward_step = x; return std::move(*this);}
+  SnakeGameOption &&reward_done(double x) {_reward_done = x; return std::move(*this);}
+  SnakeGameOption &&reward_food(double x) {_reward_food = x; return std::move(*this);}
 
   void update() {
     _windowWidth = _width * _gridSize;
@@ -51,6 +58,9 @@ class SnakeGame: public Env{
   width(option._width),
   height(option._height),
   gridSize(option._gridSize),
+  reward_step(option._reward_step),
+  reward_done(option._reward_done),
+  reward_food(option._reward_food),
   score(0), deadCount(0), foodEaten(false) {
     printf("seed=%.0lf\n", seed);
     if (std::isnan(seed)) rng = std::mt19937(time(NULL));
@@ -134,6 +144,7 @@ class SnakeGame: public Env{
   int score, deadCount;
   int width, height, gridSize;
   double seed, reward;
+  double reward_step, reward_food, reward_done;
   std::mt19937 rng;
 
   void handleInput(bool humanPlay=false) {
@@ -157,7 +168,7 @@ class SnakeGame: public Env{
   }
 
   void update() {
-    reward = 0;
+    reward = reward_step;
     moveSnake();
     checkCollisions();
     if (foodEaten) {
@@ -184,7 +195,7 @@ class SnakeGame: public Env{
     // Check if snake eats the food
     if (snake[0].x == food.x && snake[0].y == food.y) {
       foodEaten = true;
-      reward = 1.0;
+      reward = reward_food;
     }
     // Check if snake collides with the wall
     if (snake[0].x < 0 || snake[0].x >= width || snake[0].y < 0 || snake[0].y >= height) {
@@ -265,7 +276,7 @@ class SnakeGame: public Env{
       }
       obs[food.x+food.y*height] = 1;
     }
-    if (done) reward = -1;
+    if (done) reward = reward_done;
     if (useRender) render();
     return EnvInfo(std::make_shared<std::vector<float>>(obs), reward, done);
   }

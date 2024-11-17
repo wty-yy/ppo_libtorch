@@ -32,6 +32,10 @@ struct Config {
   double vf_coef = 0.5;
   double max_grad_norm = 0.5;
   int save_freq = int(1e6);
+  // Env
+  double reward_step = -0.01;
+  double reward_done = -10.0;
+  double reward_food = 1.0;
 
   int batch_size;
   int num_minibatches;
@@ -60,6 +64,9 @@ struct Config {
     parser.add_argument("--max-grad-norm").store_into(max_grad_norm).help("The maximum gradient norm clip");
     parser.add_argument("--save-frequent").store_into(save_freq).help("The frequency of saving the model");
     parser.add_argument("--path-load-model").store_into(path_load_model).help("The path of loading the model");
+    parser.add_argument("--reward-step").store_into(reward_step).help("The reward for each step");
+    parser.add_argument("--reward-done").store_into(reward_done).help("The reward for episode done");
+    parser.add_argument("--reward-food").store_into(reward_food).help("The reward for each food");
 
     try {
       parser.parse_args(argc, argv);
@@ -98,13 +105,17 @@ int main(int argc, char* argv[]) {
   text << "|game size|" << cfg.game_size << "|\n";
   text << "|ent coef|" << cfg.ent_coef << "|\n";
   text << "|load path|" << cfg.path_load_model << "|\n";
+  text << "|reward step, done, food|" << cfg.reward_step << ', ' << cfg.reward_done << ', ' << cfg.reward_food << "|\n";
 
   writer.add_text("hyperparameters", 0, text.str().c_str());
   fs::path path_ckpt = PATH_ROOT / "ckpt" / cfg.run_name;
   if (!fs::exists(path_ckpt)) fs::create_directories(path_ckpt);
 
   // Build environment
-  VecEnv venv([cfg](int i){return std::make_shared<SnakeGame>(SnakeGameOption().seed(cfg.seed+i).width(cfg.game_size).height(cfg.game_size));}, cfg.num_envs);
+  VecEnv venv([cfg](int i){return std::make_shared<SnakeGame>(
+    SnakeGameOption().seed(cfg.seed+i).width(cfg.game_size).height(cfg.game_size)
+    .reward_step(cfg.reward_step).reward_done(cfg.reward_done).reward_food(cfg.reward_food)
+  );}, cfg.num_envs);
   auto [obs_space, action_nums] = venv.get_space();
   // Build model, optimizer
   auto device(torch::cuda::is_available() && cfg.cuda ? torch::kCUDA : torch::kCPU);
