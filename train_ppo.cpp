@@ -90,12 +90,14 @@ int main(int argc, char* argv[]) {
   
   fs::path path_tb_log = PATH_ROOT / "tb_logs" / cfg.run_name;
   tensorboard::SummaryWriter writer(path_tb_log);
-  std::stringstream text("|param|value|\n|-|-|\n");
+  std::stringstream text;
+  text << "|param|value|\n|-|-|\n";
   text << "|seed|" << int(cfg.seed) << "|\n";
   text << "|total steps|" << int(cfg.total_steps) << "|\n";
   text << "|learning rate|" << cfg.learning_rate << "|\n";
   text << "|game size|" << cfg.game_size << "|\n";
   text << "|ent coef|" << cfg.ent_coef << "|\n";
+  text << "|load path|" << cfg.path_load_model << "|\n";
 
   writer.add_text("hyperparameters", 0, text.str().c_str());
   fs::path path_ckpt = PATH_ROOT / "ckpt" / cfg.run_name;
@@ -110,7 +112,10 @@ int main(int argc, char* argv[]) {
   model->to(device);
   auto optimizer = torch::optim::Adam(model->parameters(), torch::optim::AdamOptions(cfg.learning_rate));
   // Load model
+  int global_step = 0, pretrain_step = 0;
   if (cfg.path_load_model.size()) {
+    pretrain_step = global_step = std::stoi(fs::path(cfg.path_load_model).stem());
+    std::cout << "load from: " << cfg.path_load_model << '\n';
     torch::load(model, cfg.path_load_model);
   }
 
@@ -123,7 +128,6 @@ int main(int argc, char* argv[]) {
   std::vector<double> total_reward(cfg.num_envs);
   std::vector<int> total_length(cfg.num_envs);
 
-  int global_step = 0;
   auto start_time = std::chrono::high_resolution_clock::now();
   
   auto infos = venv.reset();
@@ -243,12 +247,12 @@ int main(int argc, char* argv[]) {
     }
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    float SPS = 1.0 * global_step / duration.count() * 1e3;
+    float SPS = 1.0 * (global_step - pretrain_step) / duration.count() * 1e3;
     // printf("vloss=%.4f, ploss=%.4f, entropy=%.4f, approx_kl=%.4f, clipfrac=%.4f, SPS=%d, duration=%.4fs\n",
     //   v_loss.item<float>(), pg_loss.item<float>(), entropy_loss.item<float>(),
     //   approx_kl, mean_clipfracs, int(SPS),
     //   duration.count() / 1e3);
-    printf("SPS=%d, time used=%.4fs/less=%.4fs\n", int(SPS), duration.count() / 1e3, 1.0f*(cfg.total_steps-global_step)/SPS);
+    printf("SPS=%d, time used=%.4fs/less=%.4fs\n", int(SPS), duration.count() / 1e3, 1.0f*(cfg.total_steps-global_step-pretrain_step)/SPS);
     writer.add_scalar("losses/value_loss", global_step, v_loss.item<float>());
     writer.add_scalar("losses/policy_loss", global_step, pg_loss.item<float>());
     writer.add_scalar("losses/entropy_loss", global_step, entropy_loss.item<float>());
@@ -256,7 +260,8 @@ int main(int argc, char* argv[]) {
     writer.add_scalar("losses/clipfracs", global_step, mean_clipfracs);
     writer.add_scalar("losses/SPS", global_step, SPS);
 
-    if (iteration == 1 || iteration == cfg.num_iterations + 1 || (global_step % cfg.save_freq < cfg.batch_size)) {
+    if (iteration == 1 || iteration == cfg.num_iterations + 1 ||
+    ((global_step-pretrain_step) % cfg.save_freq < cfg.batch_size)) {
       printf("Save model: %d\n", global_step);
       std::string model_name = std::to_string(global_step);
       while (model_name.size() < 10) model_name = "0" + model_name;
