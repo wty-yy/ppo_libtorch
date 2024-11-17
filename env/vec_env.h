@@ -60,7 +60,7 @@ class WorkerThread {
   base_cmd cmd;
   int action;
   EnvInfo info;
-  bool info_ready;
+  bool info_ready = false;
 
   void run() {
     while (true) {

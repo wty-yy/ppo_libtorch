@@ -16,7 +16,7 @@ struct Config {
   int cuda = false;
   int seed = 1;
   int torch_deterministic = true;
-  int total_steps = int(2e7);
+  double total_steps = 2e7;
   double learning_rate = 2.5e-4;
   int game_size = 16;
   int num_envs = 64;
@@ -115,7 +115,6 @@ int main(int argc, char* argv[]) {
   auto infos = venv.reset();
   std::vector<torch::Tensor> tensor_list;
   for (auto& info : infos) {
-    std::cout << info.obs->size() << ' ' << obs_space << '\n';
     tensor_list.push_back(torch::from_blob(info.obs->data(), obs_space));
   }
   auto next_obs = torch::stack(tensor_list, 0).to(device);
@@ -231,10 +230,11 @@ int main(int argc, char* argv[]) {
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
     float SPS = 1.0 * global_step / duration.count() * 1e3;
-    printf("vloss=%.4f, ploss=%.4f, entropy=%.4f, approx_kl=%.4f, clipfrac=%.4f, SPS=%d, duration=%.4fs\n",
-      v_loss.item<float>(), pg_loss.item<float>(), entropy_loss.item<float>(),
-      approx_kl, mean_clipfracs, int(SPS),
-      duration.count() / 1e3);
+    // printf("vloss=%.4f, ploss=%.4f, entropy=%.4f, approx_kl=%.4f, clipfrac=%.4f, SPS=%d, duration=%.4fs\n",
+    //   v_loss.item<float>(), pg_loss.item<float>(), entropy_loss.item<float>(),
+    //   approx_kl, mean_clipfracs, int(SPS),
+    //   duration.count() / 1e3);
+    printf("SPS=%d, time used=%.4fs/less=%.4fs\n", int(SPS), duration.count() / 1e3, 1.0f*(cfg.total_steps-global_step)/SPS);
     writer.add_scalar("losses/value_loss", global_step, v_loss.item<float>());
     writer.add_scalar("losses/policy_loss", global_step, pg_loss.item<float>());
     writer.add_scalar("losses/entropy_loss", global_step, entropy_loss.item<float>());

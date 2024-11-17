@@ -3,7 +3,7 @@ project(env_test VERSION 1.0)
 
 
 # set(RUN test_torch)
-set(RUN train_ppo_test)
+set(RUN train_ppo)
 # set(RUN eval_ppo)
 # set(RUN test_env)
 set(CPP_STEM train_ppo)
