@@ -94,6 +94,7 @@ class SnakeGame: public Env{
   }
 
   EnvInfo reset() {
+    if (useRender && score != 0) printf("episode score: %d\n", score);
     score = 0;
     reward = 0;
     done = false;

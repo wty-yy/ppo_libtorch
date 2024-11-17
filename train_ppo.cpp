@@ -18,7 +18,7 @@ struct Config {
   int torch_deterministic = true;
   int total_steps = int(2e7);
   double learning_rate = 2.5e-4;
-  int game_size = 8;
+  int game_size = 16;
   int num_envs = 64;
   int num_steps = 128;
   double gamma = 0.99;
@@ -69,7 +69,7 @@ struct Config {
 
     batch_size = num_envs * num_steps;
     num_minibatches = batch_size / minibatch_size;
-    num_iterations = total_steps / batch_size;  // 122
+    num_iterations = total_steps / batch_size;
     run_name = "seed" + std::to_string(seed) +
       "_hidden" + std::to_string(HIDDEN_DIM) +
       "_size" + std::to_string(game_size) +
@@ -91,10 +91,10 @@ int main(int argc, char* argv[]) {
   fs::path path_ckpt = PATH_ROOT / "ckpt" / cfg.run_name;
   if (!fs::exists(path_ckpt)) fs::create_directories(path_ckpt);
 
-  // 创建环境
+  // Build environment
   VecEnv venv([cfg](int i){return std::make_shared<SnakeGame>(SnakeGameOption().seed(cfg.seed+i).width(cfg.game_size).height(cfg.game_size));}, cfg.num_envs);
   auto [obs_space, action_nums] = venv.get_space();
-  // 创建模型, 优化器
+  // Build model, optimizer
   auto device(torch::cuda::is_available() && cfg.cuda ? torch::kCUDA : torch::kCPU);
   MLP model(obs_space, action_nums);
   model->to(device);
@@ -114,8 +114,10 @@ int main(int argc, char* argv[]) {
   
   auto infos = venv.reset();
   std::vector<torch::Tensor> tensor_list;
-  for (auto& info : infos)
+  for (auto& info : infos) {
+    std::cout << info.obs->size() << ' ' << obs_space << '\n';
     tensor_list.push_back(torch::from_blob(info.obs->data(), obs_space));
+  }
   auto next_obs = torch::stack(tensor_list, 0).to(device);
   auto next_done = torch::zeros(cfg.num_envs).to(device);
 

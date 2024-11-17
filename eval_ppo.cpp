@@ -1,6 +1,7 @@
 #include "env_snake.h"
 #include "vec_env.h"
 #include "model/mlp.h"
+#include <tensorboard_logger/summary_writer.h>
 #include "argparse/argparse.hpp"
 #include <iostream>
 #include <filesystem>
@@ -14,8 +15,10 @@ int game_size = 8;
 torch::Device device("cpu");
 
 namespace fs = std::filesystem;
-const std::string PATH_CKPT = "/home/yy/Coding/course/c++/ppo_cpp/ckpt";
-// const std::string PATH_CKPT = "/home/yy/Coding/course/c++/ppo_cpp/best_ckpt";
+fs::path PATH_ROOT = tensorboard::get_root_path();
+std::string PATH_CKPT = PATH_ROOT / "ckpt";
+// std::string PATH_CKPT = PATH_ROOT / "best_ckpt";
+int find_new_ckpt = true;
 
 std::string get_largest(const std::string& directory_path, bool find_folder) {
   std::string largest_folder_name, largest_folder_stem="0";
@@ -39,6 +42,8 @@ int main(int argc, char* argv[]) {
   argparse::ArgumentParser parser("eval");
   parser.add_argument("--game-size").store_into(game_size).help("The size of the game scene");
   parser.add_argument("--cuda").flag().help("If triggered, use cuda, make sure device is same as model save in training");
+  parser.add_argument("--path-ckpt-dir").store_into(PATH_CKPT).help("The checkpoints load path");
+  parser.add_argument("--find-new-ckpt").store_into(find_new_ckpt).help("If set to 1, find newest training directory");
   try {
     parser.parse_args(argc, argv);
   } catch(const std::exception& err) {
@@ -54,7 +59,7 @@ int main(int argc, char* argv[]) {
   //   sf::sleep(sf::milliseconds(10));
   // }
   auto [obs_space, action_nums] = game.get_space();
-  auto path_current_dir = fs::path(get_largest(PATH_CKPT, true));
+  std::string path_current_dir = find_new_ckpt ? get_largest(PATH_CKPT, true) : PATH_CKPT;
   std::cout << "current dir:" << path_current_dir << '\n';
   std::string path_model = get_largest(path_current_dir, false);
   std::cout << "current model: " << path_model << '\n';

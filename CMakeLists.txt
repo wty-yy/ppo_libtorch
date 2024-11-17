@@ -3,10 +3,10 @@ project(env_test VERSION 1.0)
 
 
 # set(RUN test_torch)
-# set(RUN train_ppo)
-set(RUN eval_ppo)
+set(RUN train_ppo_test)
+# set(RUN eval_ppo)
 # set(RUN test_env)
-set(CPP_STEM ${RUN})
+set(CPP_STEM train_ppo)
 
 add_executable(${RUN} ${CPP_STEM}.cpp)
 
@@ -27,3 +27,5 @@ target_link_libraries(${RUN} PUBLIC ${TENSORBOARD_LOGGER_LIBRARIES} protobuf)
 find_package(SDL2 REQUIRED)
 target_link_libraries(${RUN} PUBLIC ${SDL2_LIBRARIES})
 # target_link_libraries(${RUN} PUBLIC sfml-graphics sfml-window sfml-system)
+
+add_compile_options(-O3)

@@ -1,4 +1,8 @@
 ## 使用方法
+### 依赖包
+1. [GitHub - summary_writer](https://github.com/wty-yy/summary_writer): 用于绘制TensorBoard曲线
+2. SDL2下载: `sudo apt install libsdl2-dev`
+
 ### VSCode配置
 `.vscode/settings.json`中加入
 ```json
