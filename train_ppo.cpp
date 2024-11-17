@@ -88,6 +88,14 @@ int main(int argc, char* argv[]) {
   
   fs::path path_tb_log = PATH_ROOT / "tb_logs" / cfg.run_name;
   tensorboard::SummaryWriter writer(path_tb_log);
+  std::stringstream text("|param|value|\n|-|-|\n");
+  text << "|seed|" << int(cfg.seed) << "|\n";
+  text << "|total steps|" << int(cfg.total_steps) << "|\n";
+  text << "|learning rate|" << cfg.learning_rate << "|\n";
+  text << "|game size|" << cfg.game_size << "|\n";
+  text << "|ent coef|" << cfg.ent_coef << "|\n";
+
+  writer.add_text("hyperparameters", 0, text.str().c_str());
   fs::path path_ckpt = PATH_ROOT / "ckpt" / cfg.run_name;
   if (!fs::exists(path_ckpt)) fs::create_directories(path_ckpt);
 
