@@ -3,10 +3,10 @@ project(env_test VERSION 1.0)
 
 
 # set(RUN test_torch)
-set(RUN train_ppo)
-# set(RUN eval_ppo)
+# set(RUN train_ppo)
+set(RUN eval_ppo)
 # set(RUN test_env)
-set(CPP_STEM train_ppo)
+set(CPP_STEM eval_ppo)
 
 add_executable(${RUN} ${CPP_STEM}.cpp)
 

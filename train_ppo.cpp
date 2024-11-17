@@ -16,9 +16,9 @@ struct Config {
   int cuda = false;
   int seed = 1;
   int torch_deterministic = true;
-  double total_steps = 2e7;
+  double total_steps = 1e8;
   double learning_rate = 2.5e-4;
-  int game_size = 16;
+  int game_size = 8;
   int num_envs = 64;
   int num_steps = 128;
   double gamma = 0.99;
@@ -31,12 +31,13 @@ struct Config {
   double ent_coef = 0.01;
   double vf_coef = 0.5;
   double max_grad_norm = 0.5;
-  int save_freq = int(2e5);
+  int save_freq = int(1e6);
 
   int batch_size;
   int num_minibatches;
   int num_iterations;
   std::string run_name;
+  std::string path_load_model;
   
   Config(int argc, char* argv[]) {
     argparse::ArgumentParser parser("ppo");
@@ -58,6 +59,7 @@ struct Config {
     parser.add_argument("--vf-coef").store_into(vf_coef).help("The coefficient of value loss");
     parser.add_argument("--max-grad-norm").store_into(max_grad_norm).help("The maximum gradient norm clip");
     parser.add_argument("--save-frequent").store_into(save_freq).help("The frequency of saving the model");
+    parser.add_argument("--path-load-model").store_into(path_load_model).help("The path of loading the model");
 
     try {
       parser.parse_args(argc, argv);
@@ -99,6 +101,10 @@ int main(int argc, char* argv[]) {
   MLP model(obs_space, action_nums);
   model->to(device);
   auto optimizer = torch::optim::Adam(model->parameters(), torch::optim::AdamOptions(cfg.learning_rate));
+  // Load model
+  if (cfg.path_load_model.size()) {
+    torch::load(model, cfg.path_load_model);
+  }
 
   auto obs = torch::zeros({cfg.num_steps, cfg.num_envs, obs_space}).to(device);
   auto actions = torch::zeros({cfg.num_steps, cfg.num_envs, 1}).to(device);
