@@ -13,32 +13,36 @@ using tensorboard::get_current_timestamp;
 using tensorboard::get_root_path;
 
 struct Config {
+  std::string version = "v3";
   int cuda = false;
   int seed = 1;
   int torch_deterministic = true;
-  double total_steps = 1e8;
-  double learning_rate = 2.5e-4;
+  double total_steps = 5e8;
+  double init_lr = 2.5e-4;
+  double final_lr = 5e-5;
   int game_size = 8;
   int num_envs = 64;
   int num_steps = 128;
-  double gamma = 0.99;
+  double anneal_steps = 4e8;
+  double gamma = 0.995;
   double gae_lambda = 0.95;
-  int minibatch_size = 512;
-  int update_epochs = 4;
+  int num_minibatches = 8;
+  int update_epochs = 3;
   int norm_adv = false;
-  double clip_coef = 0.2;
-  // bool clip_vloss = true;
-  double ent_coef = 0.01;
+  double clip_coef = 0.1;
+  int clip_vloss = true;
+  double init_ent_coef = 0.01;
+  double final_ent_coef = 5e-4;
   double vf_coef = 0.5;
   double max_grad_norm = 0.5;
-  int save_freq = int(1e6);
+  int save_freq = int(1e7);
   // Env
-  double reward_step = -0.01;
-  double reward_done = -10.0;
-  double reward_food = 1.0;
+  double reward_step = -0.0;
+  double reward_done = -0.0;
+  double reward_food = NAN;  // dynamic
 
   int batch_size;
-  int num_minibatches;
+  int minibatch_size;
   int num_iterations;
   std::string run_name;
   std::string path_load_model;
@@ -49,17 +53,20 @@ struct Config {
     parser.add_argument("--torch-deterministic").store_into(torch_deterministic).help("Make torch randomization results deterministic");
     parser.add_argument("--seed").store_into(seed).help("Random seed");
     parser.add_argument("--total-steps").store_into(total_steps).help("The total number of training steps");
-    parser.add_argument("--learning-rate").store_into(learning_rate).help("Learning rate of the optimizer");
+    parser.add_argument("--init-lr").store_into(init_lr).help("The initialization of learning rate");
+    parser.add_argument("--final-lr").store_into(final_lr).help("The final of learning rate");
     parser.add_argument("--game-size").store_into(game_size).help("The size of the game scene");
     parser.add_argument("--num-envs").store_into(num_envs).help("The number of threads in the parallel computing environment");
     parser.add_argument("--num-steps").store_into(num_steps).help("The number of steps for all environments in each training");
+    parser.add_argument("--anneal-steps").store_into(anneal_steps).help("The number of steps for anneal learning rate and entropy coefficient");
     parser.add_argument("--gamma").store_into(gamma).help("The coefficient gamma in Markov process");
     parser.add_argument("--gae-lambda").store_into(gae_lambda).help("The coefficient lambda in GAE");
-    parser.add_argument("--minibatch-size").store_into(minibatch_size).help("The size of minibatch for each model update");
+    parser.add_argument("--num-minibatches").store_into(num_minibatches).help("The number of minibatch for each model update");
     parser.add_argument("--update-epochs").store_into(update_epochs).help("The training epochs for each batch (all envs collect samples after 'num_steps')");
     parser.add_argument("--norm-adv").store_into(norm_adv).help("If triggered, use normalization for advantage value");
     parser.add_argument("--clip-coef").store_into(clip_coef).help("The clip coefficient of action scaling");
-    parser.add_argument("--ent-coef").store_into(ent_coef).help("The coefficient of entropy loss");
+    parser.add_argument("--init-ent-coef").store_into(init_ent_coef).help("The coefficient of entropy loss");
+    parser.add_argument("--final-ent-coef").store_into(final_ent_coef).help("The coefficient of entropy loss");
     parser.add_argument("--vf-coef").store_into(vf_coef).help("The coefficient of value loss");
     parser.add_argument("--max-grad-norm").store_into(max_grad_norm).help("The maximum gradient norm clip");
     parser.add_argument("--save-frequent").store_into(save_freq).help("The frequency of saving the model");
@@ -77,10 +84,9 @@ struct Config {
     }
 
     batch_size = num_envs * num_steps;
-    num_minibatches = batch_size / minibatch_size;
+    minibatch_size = batch_size / num_minibatches;
     num_iterations = total_steps / batch_size;
-    run_name = "seed" + std::to_string(seed) +
-      "_hidden" + std::to_string(HIDDEN_DIM) +
+    run_name = version + "_seed" + std::to_string(seed) +
       "_size" + std::to_string(game_size) +
       "_" + get_current_timestamp();
   }
@@ -101,11 +107,17 @@ int main(int argc, char* argv[]) {
   text << "|param|value|\n|-|-|\n";
   text << "|seed|" << int(cfg.seed) << "|\n";
   text << "|total steps|" << int(cfg.total_steps) << "|\n";
-  text << "|learning rate|" << cfg.learning_rate << "|\n";
+  text << "|anneal steps|" << int(cfg.anneal_steps) << "|\n";
+  text << "|init learning rate|" << cfg.init_lr << "|\n";
+  text << "|final learning rate|" << cfg.final_lr << "|\n";
   text << "|game size|" << cfg.game_size << "|\n";
-  text << "|ent coef|" << cfg.ent_coef << "|\n";
+  text << "|init ent coef|" << cfg.init_ent_coef << "|\n";
+  text << "|final ent coef|" << cfg.final_ent_coef << "|\n";
   text << "|load path|" << cfg.path_load_model << "|\n";
-  text << "|reward step, done, food|" << cfg.reward_step << ', ' << cfg.reward_done << ', ' << cfg.reward_food << "|\n";
+  text << "|reward step, done, food|" << cfg.reward_step << ", " << cfg.reward_done << ", " << cfg.reward_food << "|\n";
+  text << "|minibatch size|" << cfg.minibatch_size << "|\n";
+  text << "|num minibatchsizes size|" << cfg.num_minibatches << "|\n";
+  text << "|clip vloss|" << cfg.clip_vloss << "|\n";
 
   writer.add_text("hyperparameters", 0, text.str().c_str());
   fs::path path_ckpt = PATH_ROOT / "ckpt" / cfg.run_name;
@@ -121,7 +133,7 @@ int main(int argc, char* argv[]) {
   auto device(torch::cuda::is_available() && cfg.cuda ? torch::kCUDA : torch::kCPU);
   MLP model(obs_space, action_nums);
   model->to(device);
-  auto optimizer = torch::optim::Adam(model->parameters(), torch::optim::AdamOptions(cfg.learning_rate));
+  auto optimizer = torch::optim::Adam(model->parameters(), torch::optim::AdamOptions(cfg.init_lr));
   // Load model
   int global_step = 0, pretrain_step = 0;
   if (cfg.path_load_model.size()) {
@@ -137,6 +149,7 @@ int main(int argc, char* argv[]) {
   auto dones = torch::zeros({cfg.num_steps, cfg.num_envs}).to(device);
   auto values = torch::zeros({cfg.num_steps, cfg.num_envs}).to(device);
   std::vector<double> total_reward(cfg.num_envs);
+  std::vector<double> total_score(cfg.num_envs);
   std::vector<int> total_length(cfg.num_envs);
 
   auto start_time = std::chrono::high_resolution_clock::now();
@@ -150,6 +163,12 @@ int main(int argc, char* argv[]) {
   auto next_done = torch::zeros(cfg.num_envs).to(device);
 
   for (int iteration = 1; iteration <= cfg.num_iterations + 1; ++iteration) {
+    bool do_anneal = cfg.anneal_steps > 0 && global_step < cfg.anneal_steps;
+    double frac = do_anneal ? (1.0 - 1.0 * global_step / cfg.anneal_steps) : 0.0;
+    double lr = (cfg.init_lr - cfg.final_lr) * frac + cfg.final_lr;
+    static_cast<torch::optim::AdamOptions &>(optimizer.param_groups()[0].options()).lr(lr);
+    double ent_coef = (cfg.init_ent_coef - cfg.final_ent_coef) * frac + cfg.final_ent_coef;
+    double mean_reward = 0, mean_score = 0, mean_legnth = 0, done_count = 0;
     for (int step = 0; step < cfg.num_steps; ++step) {
       global_step += cfg.num_envs;
       obs[step] = next_obs;
@@ -173,12 +192,18 @@ int main(int argc, char* argv[]) {
         next_obs[i] = torch::from_blob(infos[i].obs->data(), obs_space).to(device);
         rewards.index({step, i}) = (float)infos[i].reward;
         total_reward[i] += infos[i].reward;
+        total_score[i] += double(infos[i].reward > 0);
         total_length[i] += 1;
         if (infos[i].done) {
           // printf("global_step=%d, total_reward=%.2lf, total_length=%d\n", global_step, total_reward[i], total_length[i]);
-          writer.add_scalar("charts/total_reward", global_step, total_reward[i]);
-          writer.add_scalar("charts/total_length", global_step, total_length[i]);
+          // writer.add_scalar("charts/total_reward", global_step, total_reward[i]);
+          // writer.add_scalar("charts/total_length", global_step, total_length[i]);
+          done_count += 1;
+          mean_reward += (total_reward[i] - mean_reward) / done_count;
+          mean_score += (total_score[i] - mean_score) / done_count;
+          mean_legnth += (total_length[i] - mean_legnth) / done_count;
           total_reward[i] = 0;
+          total_score[i] = 0;
           total_length[i] = 0;
         }
       }
@@ -244,10 +269,20 @@ int main(int argc, char* argv[]) {
 
         // Value loss
         newvalue = newvalue.view(-1);
-        v_loss = 0.5 * ((newvalue - b_returns.index_select(0, mb_idx)).pow(2)).mean();
+        auto v_loss_unclipped = (newvalue - b_returns.index_select(0, mb_idx)).pow(2);
+        if (cfg.clip_vloss) {
+          auto v_clipped = b_values.index_select(0, mb_idx) + torch::clamp(
+            newvalue - b_values.index_select(0, mb_idx),
+            -cfg.clip_coef, cfg.clip_coef
+          );
+          auto v_loss_clipped = (v_clipped - b_returns.index_select(0, mb_idx)).pow(2);
+          v_loss = 0.5 * torch::max(v_loss_unclipped, v_loss_clipped).mean();
+        } else {
+          v_loss = 0.5 * v_loss_unclipped;
+        }
 
         entropy_loss = entropy.mean();
-        auto loss = pg_loss - cfg.ent_coef * entropy_loss + cfg.vf_coef * v_loss;
+        auto loss = pg_loss - ent_coef * entropy_loss + cfg.vf_coef * v_loss;
 
         optimizer.zero_grad();
         loss.backward();
@@ -263,13 +298,18 @@ int main(int argc, char* argv[]) {
     //   v_loss.item<float>(), pg_loss.item<float>(), entropy_loss.item<float>(),
     //   approx_kl, mean_clipfracs, int(SPS),
     //   duration.count() / 1e3);
-    printf("SPS=%d, time used=%.4fs/less=%.4fs\n", int(SPS), duration.count() / 1e3, 1.0f*(cfg.total_steps-global_step-pretrain_step)/SPS);
+    printf("SPS=%d, time used=%.4fs/less=%.4fs\n", int(SPS), duration.count() / 1e3, 1.0f*(cfg.total_steps-global_step+pretrain_step)/SPS);
     writer.add_scalar("losses/value_loss", global_step, v_loss.item<float>());
     writer.add_scalar("losses/policy_loss", global_step, pg_loss.item<float>());
     writer.add_scalar("losses/entropy_loss", global_step, entropy_loss.item<float>());
     writer.add_scalar("losses/approx_kl", global_step, approx_kl);
     writer.add_scalar("losses/clipfracs", global_step, mean_clipfracs);
-    writer.add_scalar("losses/SPS", global_step, SPS);
+    writer.add_scalar("charts/learning_rate", global_step, lr);
+    writer.add_scalar("charts/entropy_coefficient", global_step, ent_coef);
+    writer.add_scalar("charts/SPS", global_step, SPS);
+    writer.add_scalar("charts/total_reward", global_step, mean_reward);
+    writer.add_scalar("charts/total_score", global_step, mean_score);
+    writer.add_scalar("charts/total_length", global_step, mean_legnth);
 
     if (iteration == 1 || iteration == cfg.num_iterations + 1 ||
     ((global_step-pretrain_step) % cfg.save_freq < cfg.batch_size)) {

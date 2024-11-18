@@ -172,7 +172,6 @@ class SnakeGame: public Env{
     moveSnake();
     checkCollisions();
     if (foodEaten) {
-      score += 1;
       snake.push_back(snake.back());
       foodEaten = false;
       generateFood();
@@ -195,7 +194,11 @@ class SnakeGame: public Env{
     // Check if snake eats the food
     if (snake[0].x == food.x && snake[0].y == food.y) {
       foodEaten = true;
+      score += 1;
       reward = reward_food;
+      if (std::isnan(reward)) {
+        reward = std::max(1.0 * score / (width * height), 0.1);
+      }
     }
     // Check if snake collides with the wall
     if (snake[0].x < 0 || snake[0].x >= width || snake[0].y < 0 || snake[0].y >= height) {
@@ -238,7 +241,7 @@ class SnakeGame: public Env{
     snakeRect.h = gridSize - 1;
     size_t size = snake.size();
     for (size_t i = 0; i < size; ++i) {
-      int alpha = std::max(255.0 * (size - i) / size, 50.0);
+      int alpha = std::max(255.0 * (size - i) / size, 100.0);
       snakeRect.x = snake[i].x * gridSize;
       snakeRect.y = snake[i].y * gridSize;
       SDL_SetRenderDrawColor(renderer, 0, alpha, 0, 255);
