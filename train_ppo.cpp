@@ -13,17 +13,18 @@ using tensorboard::get_current_timestamp;
 using tensorboard::get_root_path;
 
 struct Config {
-  std::string version = "v3";
+  std::string version = "v3-retry";
+  // std::string version = "debug";
   int cuda = false;
   int seed = 1;
   int torch_deterministic = true;
-  double total_steps = 5e8;
+  double total_steps = 1e9;
   double init_lr = 2.5e-4;
-  double final_lr = 5e-5;
+  double final_lr = 2e-5;
   int game_size = 8;
   int num_envs = 64;
   int num_steps = 128;
-  double anneal_steps = 4e8;
+  double anneal_steps = 8e8;
   double gamma = 0.995;
   double gae_lambda = 0.95;
   int num_minibatches = 8;
@@ -32,10 +33,11 @@ struct Config {
   double clip_coef = 0.1;
   int clip_vloss = true;
   double init_ent_coef = 0.01;
-  double final_ent_coef = 5e-4;
+  double final_ent_coef = 1e-5;
   double vf_coef = 0.5;
   double max_grad_norm = 0.5;
   int save_freq = int(1e7);
+  std::string optimizer = "Adam";
   // Env
   double reward_step = -0.0;
   double reward_done = -0.0;
@@ -74,6 +76,7 @@ struct Config {
     parser.add_argument("--reward-step").store_into(reward_step).help("The reward for each step");
     parser.add_argument("--reward-done").store_into(reward_done).help("The reward for episode done");
     parser.add_argument("--reward-food").store_into(reward_food).help("The reward for each food");
+    parser.add_argument("--optimizer").store_into(optimizer).help("The name of optimizer: [Adam|SGD]");
 
     try {
       parser.parse_args(argc, argv);
@@ -85,7 +88,6 @@ struct Config {
 
     batch_size = num_envs * num_steps;
     minibatch_size = batch_size / num_minibatches;
-    num_iterations = total_steps / batch_size;
     run_name = version + "_seed" + std::to_string(seed) +
       "_size" + std::to_string(game_size) +
       "_" + get_current_timestamp();
@@ -105,6 +107,7 @@ int main(int argc, char* argv[]) {
   tensorboard::SummaryWriter writer(path_tb_log);
   std::stringstream text;
   text << "|param|value|\n|-|-|\n";
+  text << "|version|" << cfg.version << "|\n";
   text << "|seed|" << int(cfg.seed) << "|\n";
   text << "|total steps|" << int(cfg.total_steps) << "|\n";
   text << "|anneal steps|" << int(cfg.anneal_steps) << "|\n";
@@ -118,6 +121,7 @@ int main(int argc, char* argv[]) {
   text << "|minibatch size|" << cfg.minibatch_size << "|\n";
   text << "|num minibatchsizes size|" << cfg.num_minibatches << "|\n";
   text << "|clip vloss|" << cfg.clip_vloss << "|\n";
+  text << "|optimizer|" << cfg.optimizer << "|\n";
 
   writer.add_text("hyperparameters", 0, text.str().c_str());
   fs::path path_ckpt = PATH_ROOT / "ckpt" / cfg.run_name;
@@ -133,7 +137,14 @@ int main(int argc, char* argv[]) {
   auto device(torch::cuda::is_available() && cfg.cuda ? torch::kCUDA : torch::kCPU);
   MLP model(obs_space, action_nums);
   model->to(device);
-  auto optimizer = torch::optim::Adam(model->parameters(), torch::optim::AdamOptions(cfg.init_lr));
+  std::shared_ptr<torch::optim::Optimizer> optimizer;
+  if (cfg.optimizer == "Adam") {
+    printf("Use Adam\n");
+    optimizer = std::make_shared<torch::optim::Adam>(model->parameters(), torch::optim::AdamOptions(cfg.init_lr));
+  } else if (cfg.optimizer == "SGD") {  // TODO: ERROR?
+    printf("Use SGD\n");
+    optimizer = std::make_shared<torch::optim::SGD>(model->parameters(), torch::optim::SGDOptions(cfg.init_lr));
+  }
   // Load model
   int global_step = 0, pretrain_step = 0;
   if (cfg.path_load_model.size()) {
@@ -141,6 +152,7 @@ int main(int argc, char* argv[]) {
     std::cout << "load from: " << cfg.path_load_model << '\n';
     torch::load(model, cfg.path_load_model);
   }
+  cfg.num_iterations = (cfg.total_steps - pretrain_step) / cfg.batch_size;
 
   auto obs = torch::zeros({cfg.num_steps, cfg.num_envs, obs_space}).to(device);
   auto actions = torch::zeros({cfg.num_steps, cfg.num_envs, 1}).to(device);
@@ -166,7 +178,12 @@ int main(int argc, char* argv[]) {
     bool do_anneal = cfg.anneal_steps > 0 && global_step < cfg.anneal_steps;
     double frac = do_anneal ? (1.0 - 1.0 * global_step / cfg.anneal_steps) : 0.0;
     double lr = (cfg.init_lr - cfg.final_lr) * frac + cfg.final_lr;
-    static_cast<torch::optim::AdamOptions &>(optimizer.param_groups()[0].options()).lr(lr);
+    for (auto& group : optimizer->param_groups()) {
+      if (group.has_options()) {
+        static_cast<torch::optim::OptimizerOptions&>(group.options()).set_lr(lr);
+      }
+    }
+    // static_cast<torch::optim::OptimizerOptions &>(optimizer->param_groups()[0].options()).set_lr(lr);
     double ent_coef = (cfg.init_ent_coef - cfg.final_ent_coef) * frac + cfg.final_ent_coef;
     double mean_reward = 0, mean_score = 0, mean_legnth = 0, done_count = 0;
     for (int step = 0; step < cfg.num_steps; ++step) {
@@ -284,11 +301,10 @@ int main(int argc, char* argv[]) {
         entropy_loss = entropy.mean();
         auto loss = pg_loss - ent_coef * entropy_loss + cfg.vf_coef * v_loss;
 
-        optimizer.zero_grad();
+        optimizer->zero_grad();
         loss.backward();
         torch::nn::utils::clip_grad_norm_(model->parameters(), cfg.max_grad_norm);
-        optimizer.step();
-
+        optimizer->step();
       }
     }
     auto end_time = std::chrono::high_resolution_clock::now();

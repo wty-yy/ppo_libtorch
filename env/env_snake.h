@@ -225,10 +225,14 @@ class SnakeGame: public Env{
       }
       if (!crash) avail_pos.emplace_back(i, j);
     }
-    std::uniform_int_distribution<int> dist(0, avail_pos.size()-1);
-    auto& pos = avail_pos[dist(rng)];
-    food.x = pos.first; food.y = pos.second;
-    // printf("food:%d,%d\n", food.x, food.y);
+    if (avail_pos.size() == 0) {  // win!
+      done = true;
+      food.x = food.y = -1;
+    } else {
+      std::uniform_int_distribution<int> dist(0, avail_pos.size()-1);
+      auto& pos = avail_pos[dist(rng)];
+      food.x = pos.first; food.y = pos.second;
+    }
   }
 
   void render() {
