@@ -5,6 +5,8 @@ project(env_test VERSION 1.0)
 set(EXECUTABLES
     train_ppo train_ppo.cpp
     eval_ppo eval_ppo.cpp
+    # test_cnn tests/test_cnn.cpp
+    train_ppo_cnn train_ppo_cnn.cpp
 )
 
 list(LENGTH EXECUTABLES EXECUTABLES_LENGTH)

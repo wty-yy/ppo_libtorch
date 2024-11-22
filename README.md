@@ -7,12 +7,13 @@
 - [更新日志](#更新日志)
 - [调参](#调参)
 ## 效果图
-|![8x8训练4h](./assets/snake8x8.gif)|![8x8训练4h](./assets/snake8x8.gif)|
+|![8x8训练4h](./assets/snake8x8.gif)||
 |-|-|
-|8x8大小训练4h(7e8步)|-|
+|8x8大小训练4h(7e8步)达到64分||
+|`./build/eval_ppo --path-ckpt-dir /home/yy/Coding/GitHub/ppo_libtorch/best_ckpt/v3-retry_seed1_size8_1e9 --find-new-ckpt 0 --game-size 8 --deterministic 1`||
 ## 使用方法
-### 依赖包
-1. [GitHub - summary_writer](https://github.com/wty-yy/summary_writer): 用于绘制TensorBoard曲线
+### 依赖包安装
+1. [GitHub - summary_writer](https://github.com/wty-yy/summary_writer): 用于绘制TensorBoard曲线（根据）
 2. SDL2下载: `sudo apt install libsdl2-dev`
 
 ### VSCode配置

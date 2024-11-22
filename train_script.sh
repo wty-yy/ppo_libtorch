@@ -1,3 +1,5 @@
 #!/bin/bash
 
-./build/train_ppo --final-ent-coef 0.01
+./build/train_ppo_cnn --seed 1
+./build/train_ppo_cnn --seed 2
+./build/train_ppo_cnn --seed 3
