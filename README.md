@@ -70,6 +70,7 @@ cmake --build build
 1. 执行训练程序，以`train_ppo`训练大小`8x8`为例: `./build/train_ppo --game-size 8 --total-steps 2e8 --seed 1`（训练1h左右，达到40分左右的成绩）
 2. 自动创建`ckpt`和`tb_logs`文件夹，分别存储当前模型参数与tensorboard日志
 3. 查看日志信息`tensorboard --logdir ./tb_logs`
+![TensorBoard效果图](./assets/tensorboard_8x8_mlp.png)
 
 ## 代码结构
 ```bash
